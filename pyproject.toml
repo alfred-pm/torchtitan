@@ -18,6 +18,9 @@ dependencies = [
     "tokenizers>=0.15.0",
     "safetensors",
 
+    # Checkpointing
+    "torch_checkpointing>=0.1.0",
+
     # Miscellaneous
     "tyro",
     "tensorboard",
