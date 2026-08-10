@@ -211,13 +211,30 @@ class Module(nn.Module, Configurable):
     def _init_self_buffers(self, *, buffer_device: torch.device | None = None) -> None:
         """Initialize this module's own buffers.
 
-        The default is a no-op. Override for device-aware buffer
-        initialization (e.g., RoPE cache, MoE counters).
+        Override for device-aware buffer initialization (e.g., RoPE cache, MoE
+        counters). The default raises if this module owns any buffer, mirroring
+        ``_init_self_parameters``: the trainer builds under ``torch.device("meta")``
+        and then calls ``to_empty()``, which gives every buffer *uninitialised*
+        storage, so a buffer whose owner does not re-materialize it here holds
+        arbitrary memory for the whole run. Nothing else catches that -- a
+        ``persistent=False`` buffer is not in the state dict, so no checkpoint load
+        repairs it, and on CPU the garbage often reads as zeros.
+
+        If a buffer is genuinely written before it is read, override this as a no-op
+        to say so.
 
         Args:
             buffer_device: Target device for buffer creation/initialization.
         """
-        pass
+        own_buffer_names = [name for name, _ in self.named_buffers(recurse=False)]
+        if own_buffer_names:
+            raise ValueError(
+                f"{type(self).__name__} owns buffers {own_buffer_names} but does not "
+                "override _init_self_buffers, so after to_empty() they hold "
+                "uninitialised memory. Override it to re-materialize them on "
+                "buffer_device (see RoPE._init_self_buffers), or override it as a "
+                "no-op if they are written before they are read."
+            )
 
     def _cache_pos_arg_names(self) -> list[str]:
         """Return positional arg names of ``forward`` (excluding ``self``), cached.

@@ -88,6 +88,74 @@ class TestModuleInitStates(unittest.TestCase):
         m.init_states(buffer_device=torch.device("cpu"))
         self.assertEqual(m.buffer_device_seen, torch.device("cpu"))
 
+    def test_default_init_states_buffer_without_override_raises(self):
+        """Own buffer + no _init_self_buffers override raises, as for parameters.
+
+        to_empty() hands every buffer uninitialised storage, so a module that
+        registers one and never re-materializes it runs on arbitrary memory.
+        """
+
+        class ForgetfulBuffer(Module):
+            def __init__(self):
+                super().__init__()
+                self.register_buffer("lut", torch.zeros(4), persistent=False)
+
+        m = ForgetfulBuffer()
+        with self.assertRaises(ValueError):
+            m.init_states()
+
+    def test_noop_override_opts_out(self):
+        """A buffer written before it is read declares that with a no-op override."""
+
+        class ScratchBuffer(Module):
+            def __init__(self):
+                super().__init__()
+                self.register_buffer("scratch", torch.zeros(4))
+
+            def _init_self_buffers(self, *, buffer_device=None):
+                pass
+
+        ScratchBuffer().init_states()  # should not raise
+
+    def test_buffer_survives_meta_init(self):
+        """The path the trainer takes: meta build -> to_empty() -> init_states().
+
+        Without the override the constant does not survive to_empty(); the raise
+        above is what turns that into a startup error instead of silent garbage.
+        """
+
+        class ConstantBuffer(Module):
+            def __init__(self):
+                super().__init__()
+                self._ids = [0, 2, 3, 5]
+                self.register_buffer(
+                    "ids", torch.tensor(self._ids, dtype=torch.long), persistent=False
+                )
+
+            def _init_self_buffers(self, *, buffer_device=None):
+                if buffer_device is None:
+                    buffer_device = self.ids.device
+                self.ids = torch.tensor(
+                    self._ids, dtype=torch.long, device=buffer_device
+                )
+
+        with torch.device("meta"):
+            m = ConstantBuffer()
+        m.to_empty(device="cpu")
+        m.init_states(buffer_device=torch.device("cpu"))
+
+        self.assertEqual(m.ids.tolist(), [0, 2, 3, 5])
+
+    def test_none_buffer_slot_does_not_raise(self):
+        """``register_buffer(name, None)`` reserves a slot; there is nothing to lose."""
+
+        class ReservedSlot(Module):
+            def __init__(self):
+                super().__init__()
+                self.register_buffer("later", None)
+
+        ReservedSlot().init_states()  # should not raise
+
     def test_no_params_no_error(self):
         """Module with no parameters and no param_init doesn't raise."""
 
