@@ -357,16 +357,11 @@ def _per_head_muon_sharding(num_heads: int) -> MuonComputeSharding:
 class _KimiTrainerConfig(Trainer.Config):
     def __post_init__(self) -> None:
         Trainer.Config.__post_init__(self)
-        if (
-            self.parallelism.tensor_parallel_degree > 1
-            or self.parallelism.pipeline_parallel_degree > 1
-        ):
+        if self.parallelism.tensor_parallel_degree > 1:
             # Fail during config parsing, before TP/FSDP creates _StridedShard
-            # storage or PP constructs optimizers from stage-local parameters.
+            # storage.
             raise ValueError(
                 "Kimi DistributedMuon currently requires "
-                "tensor_parallel_degree=1 and pipeline_parallel_degree=1: "
-                "tensor parallelism can produce unsupported _StridedShard "
-                "parameter layouts, and pipeline parallelism gives each stage "
-                "only a subset of the optimizer's parameter-group patterns."
+                "tensor_parallel_degree=1: tensor parallelism can produce "
+                "unsupported _StridedShard parameter layouts."
             )
