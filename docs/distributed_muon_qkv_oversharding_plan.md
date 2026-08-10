@@ -74,9 +74,9 @@ when at least one resolved parameter transition requires redistribution; an
 entirely compute-ready bucket remains mesh-free. Muon balances single-rank
 `Owned` compute with estimated Newton-Schulz work as the primary load and
 tensor bytes as the secondary load, then immediately converts those choices to
-endpoint routes. Cumulative compute load breaks exact per-bucket ties.
-`Shard(0)` compute does not require a single-rank assignment. The Muon-local
-`_balance_loads_across_partitions` helper accepts
+endpoint routes. Cumulative compute load breaks exact per-bucket ties. Neither
+`Shard(0)` nor `Replicate` compute requires a single-rank assignment. The
+Muon-local `_balance_loads_across_partitions` helper accepts
 `(primary load, secondary load, stable key)` triples; the adapter supplies the
 Muon-specific costs and FQNs as deterministic keys.
 
@@ -108,11 +108,11 @@ Update `muon/storage_to_compute.py` for placement planning and
 `muon/distributed_muon.py` for the optimizer runtime:
 
 - Represent storage-to-compute behavior with explicit transitions: no
-  redistribution, whole-tensor single-participant compute, or dimension-0
-  sharded compute with view-aware repartitioning.
+  redistribution, whole-tensor single-participant or replicated compute, or
+  dimension-0 sharded compute with view-aware repartitioning.
 - Fingerprint the mathematical matrix view: FQN, global storage shape, compute
-  view, and global compute shape. Do not fingerprint `Owned` or `Shard`
-  execution distribution.
+  view, and global compute shape. Do not fingerprint `Owned`, `Replicate`, or
+  `Shard` execution distribution.
 - Do not include generated routes, participant choices, world size, buckets,
   or storage alignment in the checkpoint fingerprint.
 - Keep gradients and momentum in their original FSDP2 DTensor layout.
